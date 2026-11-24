@@ -130,10 +130,40 @@ textarea { height: 200px; padding: var(--sp-2); resize: vertical; line-height: 1
       <input type="password" id="password" placeholder="6자 이상" autocomplete="new-password" minlength="6"
         style="width:100%;height:var(--btn-h);padding:0 var(--sp-2);font:inherit;background:#fff;border:1px solid var(--color-line);border-radius:var(--radius);outline:none"></label>
     <p class="small">이메일은 로그인에만 쓰고, 다른 사람에게 보이지 않아요.</p>
+    <div class="card stack small" id="agree-box">
+      <label class="check"><input type="checkbox" id="agree-all"><b>아래 내용에 모두 동의해요</b></label>
+      <label class="check"><input type="checkbox" class="agree" id="agree-age"><span>[필수] 만 14세 이상이에요</span></label>
+      <label class="check"><input type="checkbox" class="agree" id="agree-terms"><span>[필수] <a class="link" href="terms.html" target="_blank">이용규칙</a>에 동의해요</span></label>
+      <label class="check"><input type="checkbox" class="agree" id="agree-privacy"><span>[필수] <a class="link" href="privacy.html" target="_blank">개인정보 수집·이용</a>에 동의해요 <span class="muted">(이메일·성별·목표, 국외 이전 포함)</span></span></label>
+    </div>
     <p style="text-align:center"><button class="link" id="mode-btn">이미 가입했어요</button></p>
+    <p style="text-align:center" hidden id="forgot-wrap"><button class="link" id="forgot-btn">비밀번호를 잊었어요</button></p>
   </div>
   <p class="section small" id="demo-note" hidden><span class="demo-badge">체험 모드</span> 아직 서버가 연결되지 않아 글이 이 브라우저에만 저장돼요.</p>
   <div class="bottom"><div><button class="btn btn-primary" id="email-btn">가입하고 시작하기</button></div></div>
+</section>
+
+<!-- 비밀번호 찾기 -->
+<section class="screen" id="s-forgot">
+  <div class="top"><button class="icon-btn" data-back>← 로그인</button></div>
+  <h2>비밀번호를 다시 정해요.</h2>
+  <p class="lead">가입한 이메일로 비밀번호를 바꾸는 링크를 보내 드려요.</p>
+  <div class="section stack">
+    <label class="field"><span>이메일</span><input type="email" id="forgot-email" autocomplete="email" placeholder="you@example.com"></label>
+  </div>
+  <div class="bottom"><div><button class="btn btn-primary" id="forgot-send">링크 받기</button></div></div>
+</section>
+
+<!-- 새 비밀번호 -->
+<section class="screen" id="s-reset">
+  <h2>새 비밀번호를 적어 주세요.</h2>
+  <p class="lead">다음부터 이 비밀번호로 로그인해요.</p>
+  <div class="section stack">
+    <label class="field"><span>새 비밀번호</span>
+      <input type="password" id="new-password" placeholder="6자 이상" autocomplete="new-password" minlength="6"
+        style="width:100%;height:var(--btn-h);padding:0 var(--sp-2);font:inherit;background:#fff;border:1px solid var(--color-line);border-radius:var(--radius);outline:none"></label>
+  </div>
+  <div class="bottom"><div><button class="btn btn-primary" id="reset-save">바꾸고 시작하기</button></div></div>
 </section>
 
 <!-- 2. 성별 -->
@@ -310,7 +340,8 @@ const api = DEMO ? {
   async user() { const { data } = await sb.auth.getUser(); return data.user; },
   async signInEmail(email, password, signup) {
     const { data, error } = signup
-      ? await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } })
+      ? await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname,
+          data: { agreed_at: new Date().toISOString(), agreed_version: '2026-11-24' } } })
       : await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
     // 이미 가입된 이메일로 다시 가입하면 Supabase는 빈 identities를 돌려준다
@@ -382,11 +413,16 @@ $('#mode-btn').onclick = () => {
   $('#mode-btn').textContent = signupMode ? '이미 가입했어요' : '처음이에요. 가입할게요';
   $('#password').autocomplete = signupMode ? 'new-password' : 'current-password';
   $('#email-btn').textContent = loginLabel();
+  $('#agree-box').hidden = !signupMode;
+  $('#forgot-wrap').hidden = signupMode || DEMO;
 };
+$('#agree-all').onchange = e => $$('.agree').forEach(x => x.checked = e.target.checked);
+$$('.agree').forEach(x => x.onchange = () => { $('#agree-all').checked = $$('.agree').every(y => y.checked); });
 $('#email-btn').onclick = async () => {
   const email = $('#email').value.trim(), pw = $('#password').value;
   if (!/^\S+@\S+\.\S+$/.test(email)) return toast('이메일 주소를 확인해 주세요.');
   if (pw.length < 6) return toast('비밀번호를 6자 이상 적어 주세요.');
+  if (signupMode && !$$('.agree').every(x => x.checked)) return toast('필수 항목에 모두 동의해 주세요.');
   const b = $('#email-btn'); b.disabled = true; b.textContent = '확인하고 있어요';
   try {
     const hasSession = await api.signInEmail(email, pw, signupMode);
@@ -553,6 +589,7 @@ async function renderMe() {
   const mine = await api.listPosts({ mine: true });
   $('#my-posts').innerHTML = mine.length ? mine.map(x => postCard(x, true)).join('') : '<p class="small">아직 쓴 글이 없어요.</p>';
 }
+$('#s-me').insertAdjacentHTML('beforeend', '<p class="small" style="text-align:center;margin-top:var(--sp-2)"><a class="link" href="terms.html">이용규칙</a> · <a class="link" href="privacy.html">개인정보처리방침</a></p>');
 $('#edit-profile').onclick = () => { prefillOnboarding(profile); show('s-gender'); };
 $('#logout-btn').onclick = async () => { await api.signOut(); history_.length = 0; show('s-login', false); };
 $('#delete-me').onclick = async () => {
@@ -561,17 +598,48 @@ $('#delete-me').onclick = async () => {
   catch { toast('탈퇴하지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
 };
 
+/* ---------- 비밀번호 찾기 ---------- */
+$('#forgot-btn').onclick = () => { $('#forgot-email').value = $('#email').value; show('s-forgot'); };
+$('#forgot-send').onclick = async () => {
+  const email = $('#forgot-email').value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return toast('이메일 주소를 확인해 주세요.');
+  const b = $('#forgot-send'); b.disabled = true; b.textContent = '보내고 있어요';
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error) throw error;
+    toast('메일을 보냈어요. 메일함에서 링크를 눌러 주세요.');
+  } catch (err) { toast(/rate limit/i.test(err?.message) ? '메일은 잠시 뒤에 다시 보낼 수 있어요.' : '메일을 보내지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+  b.disabled = false; b.textContent = '링크 받기';
+};
+$('#reset-save').onclick = async () => {
+  const pw = $('#new-password').value;
+  if (pw.length < 6) return toast('비밀번호를 6자 이상 적어 주세요.');
+  const b = $('#reset-save'); b.disabled = true; b.textContent = '바꾸고 있어요';
+  try {
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if (error) throw error;
+    recovering = false; history.replaceState(null, '', location.pathname);
+    toast('비밀번호를 바꿨어요.'); await start();
+  } catch (err) { toast(/different from the old/i.test(err?.message) ? '이전과 다른 비밀번호를 적어 주세요.' : '비밀번호를 바꾸지 못했어요. 링크를 다시 받아 주세요.'); }
+  b.disabled = false; b.textContent = '바꾸고 시작하기';
+};
+
 /* ---------- 시작 ---------- */
+let recovering = /type=recovery/.test(location.hash);
 let starting = null;
 function start() { return starting ||= boot().finally(() => { starting = null; }); }
 async function boot() {
+  if (recovering) return show('s-reset', false);
   const u = await api.user();
   if (!u) return show('s-login', false);
   profile = await api.getProfile();
   if (!profile) return show('s-gender', false);
   show('s-board', false);
 }
-if (sb) sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN') start(); });
+if (sb) sb.auth.onAuthStateChange((ev) => {
+  if (ev === 'PASSWORD_RECOVERY') { recovering = true; show('s-reset', false); }
+  else if (ev === 'SIGNED_IN') start();
+});
 start();
 </script>
 </body>
