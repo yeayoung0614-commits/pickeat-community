@@ -51,6 +51,7 @@ h2 { font-size: var(--fs-lg); line-height: 1.35; }
 .btn-primary:active { background: color-mix(in srgb, var(--color-primary) 90%, black); }
 .btn-primary:disabled { background: color-mix(in srgb, var(--color-muted) 40%, white); }
 .btn-secondary { border: 1px solid var(--color-primary); color: var(--color-primary); background: #fff; }
+.btn-kakao { background: #FEE500; color: rgba(0,0,0,.85); gap: 8px; }  /* 카카오 디자인 가이드 색 */
 .btn-danger { background: var(--color-danger); color: #fff; }
 .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: var(--sp-2); padding-bottom: calc(var(--sp-2) + env(safe-area-inset-bottom)); background: var(--color-bg); }
 .bottom > div { max-width: 448px; margin: 0 auto; }
@@ -123,7 +124,11 @@ textarea { height: 200px; padding: var(--sp-2); resize: vertical; line-height: 1
   <h1>식단 이야기,<br>이름 없이 나눠요.</h1>
   <p class="lead">식단관리하는 사람들끼리 오늘 먹은 것과 고민을 익명으로 이야기해요.</p>
   <div class="section stack">
+    <button class="btn btn-kakao" id="kakao-btn" hidden>
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#000" d="M12 3C6.48 3 2 6.54 2 10.9c0 2.82 1.87 5.3 4.69 6.7-.2.73-.74 2.67-.85 3.08-.13.51.19.5.39.37.16-.11 2.55-1.73 3.58-2.43.71.1 1.44.16 2.19.16 5.52 0 10-3.54 10-7.9S17.52 3 12 3z"/></svg>
+      카카오로 시작하기</button>
     <button class="btn btn-secondary" id="google-btn" hidden>구글로 시작하기</button>
+    <p class="small" id="or-email" hidden style="text-align:center">또는 이메일로</p>
     <label class="field"><span>이메일</span>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email"></label>
     <label class="field"><span>비밀번호</span>
@@ -141,6 +146,21 @@ textarea { height: 200px; padding: var(--sp-2); resize: vertical; line-height: 1
   </div>
   <p class="section small" id="demo-note" hidden><span class="demo-badge">체험 모드</span> 아직 서버가 연결되지 않아 글이 이 브라우저에만 저장돼요.</p>
   <div class="bottom"><div><button class="btn btn-primary" id="email-btn">가입하고 시작하기</button></div></div>
+</section>
+
+<!-- 간편 로그인 후 약관 동의 -->
+<section class="screen" id="s-consent">
+  <img class="logo" src="assets/logo.png" alt="픽잇">
+  <h2>시작하기 전에 확인해 주세요.</h2>
+  <p class="lead">처음 한 번만 물어봐요.</p>
+  <div class="section card stack small">
+    <label class="check"><input type="checkbox" id="c-all"><b>아래 내용에 모두 동의해요</b></label>
+    <label class="check"><input type="checkbox" class="c-agree"><span>[필수] 만 14세 이상이에요</span></label>
+    <label class="check"><input type="checkbox" class="c-agree"><span>[필수] <a class="link" href="terms.html" target="_blank">이용규칙</a>에 동의해요</span></label>
+    <label class="check"><input type="checkbox" class="c-agree"><span>[필수] <a class="link" href="privacy.html" target="_blank">개인정보 수집·이용</a>에 동의해요 <span class="muted">(카카오 회원번호·성별·목표, 국외 이전 포함)</span></span></label>
+  </div>
+  <p class="section" style="text-align:center"><button class="link" id="c-cancel">동의하지 않고 나가기</button></p>
+  <div class="bottom"><div><button class="btn btn-primary" id="c-save">동의하고 계속하기</button></div></div>
 </section>
 
 <!-- 비밀번호 찾기 -->
@@ -267,7 +287,7 @@ textarea { height: 200px; padding: var(--sp-2); resize: vertical; line-height: 1
 <section class="screen" id="s-account">
   <div class="top"><button class="icon-btn" data-back>← 내 정보</button><h2>계정 관리</h2></div>
   <div class="card" id="account-info"></div>
-  <h2 class="section" style="font-size:var(--fs-md)">비밀번호 바꾸기</h2>
+  <h2 class="section" style="font-size:var(--fs-md)" id="pw-title">비밀번호 바꾸기</h2>
   <div class="stack" style="margin-top:var(--sp-1)" id="pw-form">
     <input type="password" id="cur-password" placeholder="지금 비밀번호" autocomplete="current-password">
     <input type="password" id="next-password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password">
@@ -320,6 +340,7 @@ const api = DEMO ? {
   async user() { return local.get('user', null); },
   async signInEmail(email) { local.set('user', { id: 'demo', email }); return true; },
   async signInGoogle() { local.set('user', { id: 'demo', email: 'demo' }); },
+  async signInOAuth() { },
   async signOut() { local.set('user', null); },
   async getProfile() { return local.get('profile', null); },
   async saveProfile(p) { local.set('profile', p); },
@@ -367,7 +388,8 @@ const api = DEMO ? {
     if (signup && data.user && !data.session && data.user.identities?.length === 0) throw new Error('already registered');
     return !!data.session;
   },
-  async signInGoogle() { const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }); if (error) throw error; },
+  async signInGoogle() { return this.signInOAuth('google'); },
+  async signInOAuth(provider) { const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } }); if (error) throw error; },
   async signOut() { await sb.auth.signOut(); },
   async getProfile() { const u = await this.user(); const { data } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle(); return data; },
   async saveProfile(p) { const u = await this.user(); const { error } = await sb.from('profiles').upsert({ id: u.id, ...p }); if (error) throw error; },
@@ -426,6 +448,11 @@ document.addEventListener('click', e => {
 $('#demo-note').hidden = !DEMO;
 $$('[data-demo]').forEach(el => el.hidden = !DEMO);
 $('#google-btn').hidden = DEMO || !cfg.GOOGLE_LOGIN;
+$('#kakao-btn').hidden = DEMO || !cfg.KAKAO_LOGIN;
+$('#or-email').hidden = $('#google-btn').hidden && $('#kakao-btn').hidden;
+$('#kakao-btn').onclick = async () => {
+  try { await api.signInOAuth('kakao'); } catch { toast('카카오 로그인을 열지 못했어요. 이메일로 시작해 주세요.'); }
+};
 let signupMode = true;
 const loginLabel = () => signupMode ? '가입하고 시작하기' : '로그인';
 $('#mode-btn').onclick = () => {
@@ -614,13 +641,16 @@ async function renderAccount() {
   const u = await api.user();
   const day = t => t ? new Date(t).toLocaleDateString('ko-KR') : '-';
   const agreed = u?.user_metadata?.agreed_at;
+  const provider = u?.app_metadata?.provider || 'email';
   $('#account-info').innerHTML = `
-    <div class="info-row"><span>로그인 이메일</span><span>${esc(DEMO ? '체험 모드' : u?.email)}</span></div>
+    <div class="info-row"><span>로그인 방법</span><span>${DEMO ? '체험 모드' : provider === 'kakao' ? '카카오' : provider === 'google' ? '구글' : '이메일'}</span></div>
+    ${u?.email ? `<div class="info-row"><span>이메일</span><span>${esc(u.email)}</span></div>` : ''}
     <div class="info-row"><span>가입일</span><span>${day(u?.created_at)}</span></div>
     <div class="info-row"><span>약관 동의</span><span>${agreed ? day(agreed) : '-'}</span></div>
     <div class="info-row"><span>몸 수치 수집 동의</span><span>${profile?.body_consent_at ? day(profile.body_consent_at) : '안 함'}</span></div>
     <p class="small muted" style="margin-top:var(--sp-1)">이메일은 나만 볼 수 있어요.</p>`;
-  $('#pw-form').hidden = DEMO;
+  $('#pw-form').hidden = DEMO || provider !== 'email';
+  $('#pw-title').hidden = $('#pw-form').hidden;
   $('#cur-password').value = $('#next-password').value = '';
 }
 $('#pw-change').onclick = async () => {
@@ -677,6 +707,25 @@ $('#reset-save').onclick = async () => {
   b.disabled = false; b.textContent = '바꾸고 시작하기';
 };
 
+/* ---------- 간편 로그인 약관 동의 ---------- */
+$('#c-all').onchange = e => $$('.c-agree').forEach(x => x.checked = e.target.checked);
+$$('.c-agree').forEach(x => x.onchange = () => { $('#c-all').checked = $$('.c-agree').every(y => y.checked); });
+$('#c-save').onclick = async () => {
+  if (!$$('.c-agree').every(x => x.checked)) return toast('필수 항목에 모두 동의해 주세요.');
+  const b = $('#c-save'); b.disabled = true;
+  try {
+    const { error } = await sb.auth.updateUser({ data: { agreed_at: new Date().toISOString(), agreed_version: '2026-11-24' } });
+    if (error) throw error;
+    await start();
+  } catch { toast('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+  b.disabled = false;
+};
+// 동의하지 않으면 방금 만들어진 계정을 지운다(아무 기록도 남기지 않기)
+$('#c-cancel').onclick = async () => {
+  try { await api.deleteMe(); } catch { await api.signOut(); }
+  show('s-login', false);
+};
+
 /* ---------- 시작 ---------- */
 let recovering = /type=recovery/.test(location.hash);
 let starting = null;
@@ -685,6 +734,7 @@ async function boot() {
   if (recovering) return show('s-reset', false);
   const u = await api.user();
   if (!u) return show('s-login', false);
+  if (!DEMO && !u.user_metadata?.agreed_at) return show('s-consent', false);
   profile = await api.getProfile();
   if (!profile) return show('s-gender', false);
   show('s-board', false);

@@ -3,5 +3,6 @@
 // Secret key / service_role 키는 절대 넣지 마세요.
 window.PICKEAT_CONFIG = {
   SUPABASE_URL: "https://mpwyukmkibsbqofgwlda.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_phCLLSu_VTl5CDjW9U4uoA_u9xFx5T2"
+  SUPABASE_ANON_KEY: "sb_publishable_phCLLSu_VTl5CDjW9U4uoA_u9xFx5T2",
+  KAKAO_LOGIN: false   // Kakao Developers와 Supabase에서 카카오 설정을 마치면 true로
 };
