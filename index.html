@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>픽잇 — 식단관리 커뮤니티</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/static/woff2/SUIT.css">
+<script src="vendor/supabase.min.js"></script>
+<script src="config.js"></script>
+<style>
+:root {
+  --color-primary: #284631;
+  --color-text:    #1A1A1A;
+  --color-muted:   #6B7280;
+  --color-line:    #E5E7EB;
+  --color-bg:      #F6F3EB;
+  --color-success: #2E8B57;
+  --color-warning: #D99A1E;
+  --color-danger:  #C0392B;
+  --color-info:    #2A6BA3;
+  --font-heading: "SUIT", "Pretendard", sans-serif;
+  --font-body:    "Pretendard", "Malgun Gothic", sans-serif;
+  --fs-xs: 13px; --fs-sm: 15px; --fs-md: 17px; --fs-lg: 22px; --fs-xl: 28px;
+  --sp-1: 8px; --sp-2: 16px; --sp-3: 24px; --sp-4: 32px;
+  --radius: 8px; --btn-h: 48px;
+}
+* { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--color-bg); color: var(--color-text); font: 400 var(--fs-sm)/1.5 var(--font-body); }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.app { max-width: 480px; margin: 0 auto; min-height: 100%; position: relative; }
+.screen { display: none; min-height: 100vh; padding: var(--sp-4) var(--sp-2) calc(var(--btn-h) + var(--sp-4) + var(--sp-2)); }
+.screen.active { display: block; }
+h1, h2 { font-family: var(--font-heading); font-weight: 800; }
+h1 { font-size: var(--fs-xl); line-height: 1.3; }
+h2 { font-size: var(--fs-lg); line-height: 1.35; }
+.lead { margin-top: var(--sp-1); }
+.step { font-size: var(--fs-xs); font-weight: 600; color: var(--color-primary); margin-bottom: var(--sp-1); }
+.logo { width: 40px; height: 40px; display: block; margin-bottom: var(--sp-3); }
+.stack > * + * { margin-top: var(--sp-1); }
+.section { margin-top: var(--sp-3); }
+.card { background: #fff; border-radius: var(--radius); padding: var(--sp-2); }
+.muted { color: var(--color-muted); }   /* 흰 카드 위에서만 */
+.small { font-size: var(--fs-xs); }
+
+.btn { display: flex; align-items: center; justify-content: center; width: 100%; height: var(--btn-h); border-radius: var(--radius); font-weight: 600; }
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-primary:active { background: color-mix(in srgb, var(--color-primary) 90%, black); }
+.btn-primary:disabled { background: color-mix(in srgb, var(--color-muted) 40%, white); }
+.btn-secondary { border: 1px solid var(--color-primary); color: var(--color-primary); background: #fff; }
+.btn-danger { background: var(--color-danger); color: #fff; }
+.bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: var(--sp-2); padding-bottom: calc(var(--sp-2) + env(safe-area-inset-bottom)); background: var(--color-bg); }
+.bottom > div { max-width: 448px; margin: 0 auto; }
+
+.choice { display: flex; align-items: center; width: 100%; min-height: var(--btn-h); padding: 0 var(--sp-2); border: 1px solid var(--color-line); background: #fff; border-radius: var(--radius); text-align: left; }
+.choice[aria-pressed="true"] { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); font-weight: 600; color: var(--color-primary); }
+.choice small { margin-left: auto; font-size: var(--fs-xs); color: var(--color-muted); font-weight: 400; }
+
+label.field { display: block; }
+label.field span { display: block; font-weight: 600; margin-bottom: 4px; }
+.input-wrap { position: relative; }
+input[type=text], input[type=email], input[type=number], textarea {
+  width: 100%; height: var(--btn-h); padding: 0 var(--sp-2); font: inherit; color: var(--color-text);
+  background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius); outline: none; }
+input:focus, textarea:focus { border-color: var(--color-primary); }
+.unit { position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%); color: var(--color-muted); }
+textarea { height: 200px; padding: var(--sp-2); resize: vertical; line-height: 1.5; }
+.check { display: flex; gap: var(--sp-1); align-items: flex-start; }
+.check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--color-primary); flex: none; }
+.link { color: var(--color-primary); font-weight: 600; text-decoration: underline; }
+.notice { border-left: 3px solid var(--color-info); padding: var(--sp-1) var(--sp-2); background: #fff; border-radius: 0 var(--radius) var(--radius) 0; }
+
+/* 게시판 */
+.top { display: flex; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-2); }
+.top h2 { flex: 1; }
+.top img { width: 32px; height: 32px; }
+.icon-btn { min-width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; color: var(--color-primary); }
+.tabs { display: flex; gap: var(--sp-1); overflow-x: auto; margin: 0 calc(-1 * var(--sp-2)); padding: 0 var(--sp-2) var(--sp-1); scrollbar-width: none; }
+.tab { flex: none; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--color-line); background: #fff; font-weight: 600; font-size: var(--fs-xs); }
+.tab[aria-pressed="true"] { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.filter { display: flex; gap: var(--sp-2); font-size: var(--fs-xs); font-weight: 600; margin: var(--sp-1) 0 var(--sp-2); }
+.filter button[aria-pressed="true"] { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
+.post { display: block; width: 100%; text-align: left; background: #fff; border-radius: var(--radius); padding: var(--sp-2); }
+.post + .post { margin-top: var(--sp-1); }
+.post h3 { font-size: var(--fs-md); font-weight: 600; margin-bottom: 4px; }
+.post p { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.meta { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--color-muted); }
+.tag { display: inline-block; padding: 0 8px; border-radius: 4px; background: var(--color-bg); color: var(--color-primary); font-weight: 600; font-size: var(--fs-xs); line-height: 22px; }
+.empty { text-align: center; padding: var(--sp-4) var(--sp-2); }
+.fab { position: fixed; right: max(var(--sp-2), calc(50% - 240px + var(--sp-2))); bottom: calc(var(--sp-2) + 64px); height: var(--btn-h); padding: 0 20px; border-radius: 24px; background: var(--color-primary); color: #fff; font-weight: 600; }
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--color-line); padding-bottom: env(safe-area-inset-bottom); }
+.tabbar > div { max-width: 480px; margin: 0 auto; display: flex; }
+.tabbar button { flex: 1; height: 56px; font-size: var(--fs-xs); font-weight: 600; color: var(--color-muted); }
+.tabbar button[aria-current="page"] { color: var(--color-primary); }
+
+.detail-body { white-space: pre-wrap; word-break: break-word; margin-top: var(--sp-2); }
+.actions { display: flex; gap: var(--sp-1); margin-top: var(--sp-2); }
+.actions button { height: 36px; padding: 0 12px; border: 1px solid var(--color-line); border-radius: var(--radius); font-size: var(--fs-xs); font-weight: 600; background: #fff; }
+.actions button[aria-pressed="true"] { border-color: var(--color-primary); color: var(--color-primary); }
+.comment { padding: var(--sp-2) 0; border-top: 1px solid var(--color-line); }
+.comment b { font-size: var(--fs-xs); }
+.comment b.writer { color: var(--color-primary); }
+.comment-form { display: flex; gap: var(--sp-1); }
+.comment-form input { flex: 1; }
+.comment-form button { flex: none; width: 72px; }
+.toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--color-text); color: #fff; padding: 10px 16px; border-radius: var(--radius); font-size: var(--fs-xs); opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; }
+.demo-badge { display: inline-block; font-size: var(--fs-xs); font-weight: 600; background: var(--color-warning); color: var(--color-text); padding: 0 8px; border-radius: 4px; }
+.danger-link { color: var(--color-danger); font-size: var(--fs-xs); font-weight: 600; }
+.info-row { display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--color-line); }
+.info-row:first-child { border-top: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- 1. 첫 화면 / 로그인 -->
+<section class="screen" id="s-login">
+  <img class="logo" src="assets/logo.png" alt="픽잇">
+  <h1>식단 이야기,<br>이름 없이 나눠요.</h1>
+  <p class="lead">식단관리하는 사람들끼리 오늘 먹은 것과 고민을 익명으로 이야기해요.</p>
+  <div class="section stack">
+    <button class="btn btn-secondary" id="google-btn" hidden>구글로 시작하기</button>
+    <label class="field"><span>이메일</span>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email"></label>
+    <label class="field"><span>비밀번호</span>
+      <input type="password" id="password" placeholder="6자 이상" autocomplete="new-password" minlength="6"
+        style="width:100%;height:var(--btn-h);padding:0 var(--sp-2);font:inherit;background:#fff;border:1px solid var(--color-line);border-radius:var(--radius);outline:none"></label>
+    <p class="small">이메일은 로그인에만 쓰고, 다른 사람에게 보이지 않아요.</p>
+    <p style="text-align:center"><button class="link" id="mode-btn">이미 가입했어요</button></p>
+  </div>
+  <p class="section small" id="demo-note" hidden><span class="demo-badge">체험 모드</span> 아직 서버가 연결되지 않아 글이 이 브라우저에만 저장돼요.</p>
+  <div class="bottom"><div><button class="btn btn-primary" id="email-btn">가입하고 시작하기</button></div></div>
+</section>
+
+<!-- 2. 성별 -->
+<section class="screen" id="s-gender">
+  <p class="step">1 / 3</p>
+  <h2>성별을 골라 주세요.</h2>
+  <p class="lead">다른 사람에게는 보이지 않아요.</p>
+  <div class="section stack" data-choices="gender">
+    <button class="choice" data-value="여성">여성</button>
+    <button class="choice" data-value="남성">남성</button>
+    <button class="choice" data-value="선택 안 함">선택 안 함</button>
+  </div>
+  <div class="bottom"><div><button class="btn btn-primary" data-go="s-body" disabled>다음</button></div></div>
+</section>
+
+<!-- 3. 몸 수치 -->
+<section class="screen" id="s-body">
+  <p class="step">2 / 3</p>
+  <h2>지금 몸 상태를 적어 주세요.</h2>
+  <p class="lead">나만 볼 수 있는 기록이에요. 지금 몰라도 괜찮아요.</p>
+  <div class="section stack">
+    <label class="field"><span>몸무게</span><div class="input-wrap"><input type="number" inputmode="decimal" step="0.1" min="20" max="300" id="weight"><span class="unit">kg</span></div></label>
+    <label class="field"><span>체지방률</span><div class="input-wrap"><input type="number" inputmode="decimal" step="0.1" min="1" max="70" id="fat"><span class="unit">%</span></div></label>
+    <label class="field"><span>골격근량</span><div class="input-wrap"><input type="number" inputmode="decimal" step="0.1" min="5" max="100" id="muscle"><span class="unit">kg</span></div></label>
+  </div>
+  <div class="section card">
+    <label class="check"><input type="checkbox" id="body-consent">
+      <span>몸 수치 수집에 동의해요. <span class="muted small">(선택) 나의 기록 확인에만 쓰고, 다른 사람에게 보이지 않으며, 탈퇴하면 바로 지워져요.</span></span></label>
+  </div>
+  <p class="section" style="text-align:center"><button class="link" id="skip-body">건너뛰기</button></p>
+  <div class="bottom"><div><button class="btn btn-primary" id="body-next">다음</button></div></div>
+</section>
+
+<!-- 4. 목표 -->
+<section class="screen" id="s-goal">
+  <p class="step">3 / 3</p>
+  <h2>지금 목표는 무엇인가요?</h2>
+  <p class="lead">글 옆에 목표만 함께 보여요. 언제든 바꿀 수 있어요.</p>
+  <div class="section stack" data-choices="goal">
+    <button class="choice" data-value="대회준비">대회준비</button>
+    <button class="choice" data-value="벌크업">벌크업</button>
+    <button class="choice" data-value="다이어트">다이어트</button>
+    <button class="choice" data-value="체중유지">체중유지</button>
+  </div>
+  <div class="section card small">
+    <b>픽잇에서 지키는 것</b>
+    <ul style="padding-left:18px;margin-top:4px">
+      <li>다른 사람의 몸과 외모를 평가하지 않아요.</li>
+      <li>몸 사진, 체중계 사진, 비포/애프터는 올리지 않아요.</li>
+      <li>광고·판매 글은 올리지 않아요. 협찬 후기는 "제공받음"을 적어요.</li>
+    </ul>
+  </div>
+  <div class="bottom"><div><button class="btn btn-primary" id="enter-btn" disabled>커뮤니티 들어가기</button></div></div>
+</section>
+
+<!-- 5. 게시판 -->
+<section class="screen" id="s-board">
+  <div class="top"><img src="assets/logo.png" alt=""><h2>픽잇</h2><span class="demo-badge" data-demo hidden>체험 모드</span></div>
+  <div class="tabs" id="board-tabs"></div>
+  <div class="filter" id="goal-filter"></div>
+  <div id="post-list"></div>
+  <button class="fab" data-go="s-write">글쓰기</button>
+</section>
+
+<!-- 6. 글 보기 -->
+<section class="screen" id="s-detail">
+  <div class="top"><button class="icon-btn" data-back>← 목록</button><h2></h2><button class="icon-btn" id="delete-post" hidden style="color:var(--color-danger)">삭제</button></div>
+  <div class="card" id="detail"></div>
+  <div class="section" id="comments"></div>
+  <div class="bottom"><div class="comment-form">
+    <input type="text" id="comment-input" maxlength="1000" placeholder="익명으로 댓글 달기">
+    <button class="btn btn-primary" id="comment-btn">등록</button>
+  </div></div>
+</section>
+
+<!-- 7. 글쓰기 -->
+<section class="screen" id="s-write">
+  <div class="top"><button class="icon-btn" data-back>← 취소</button><h2>글쓰기</h2></div>
+  <div class="tabs" id="write-boards"></div>
+  <div class="section stack">
+    <input type="text" id="w-title" maxlength="60" placeholder="제목 (없어도 돼요)">
+    <textarea id="w-body" maxlength="3000" placeholder="오늘 먹은 것, 먹어 본 제품, 궁금한 것을 적어 주세요."></textarea>
+    <p class="small">익명으로 올라가요. 목표 태그만 함께 보여요.</p>
+  </div>
+  <div class="bottom"><div><button class="btn btn-primary" id="post-btn">올리기</button></div></div>
+</section>
+
+<!-- 8. 내 정보 -->
+<section class="screen" id="s-me">
+  <div class="top"><h2>내 정보</h2></div>
+  <div class="card" id="me-info"></div>
+  <div class="section stack">
+    <button class="btn btn-secondary" id="edit-profile">목표·몸 수치 바꾸기</button>
+    <button class="btn btn-secondary" id="logout-btn">로그아웃</button>
+  </div>
+  <h2 class="section" style="font-size:var(--fs-md)">내가 쓴 글</h2>
+  <div class="section" id="my-posts" style="margin-top:var(--sp-1)"></div>
+  <p class="section" style="text-align:center"><button class="danger-link" id="delete-me">탈퇴하기</button></p>
+</section>
+
+<nav class="tabbar" id="tabbar" hidden><div>
+  <button data-tab="s-board" aria-current="page">게시판</button>
+  <button data-tab="s-me">내 정보</button>
+</div></nav>
+<div class="toast" id="toast" role="status"></div>
+</div>
+
+<script>
+const BOARDS = ['자유', '오늘 식단', '제품 후기', '질문'];
+const GOALS = ['대회준비', '벌크업', '다이어트', '체중유지'];
+const HOT_MIN = 10;
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function ago(t) {
+  const m = Math.floor((Date.now() - new Date(t)) / 60000);
+  if (m < 1) return '방금';
+  if (m < 60) return m + '분 전';
+  if (m < 1440) return Math.floor(m / 60) + '시간 전';
+  return new Date(t).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
+
+/* ---------- 데이터: Supabase가 있으면 서버, 없으면 체험 모드(이 브라우저에만 저장) ---------- */
+const cfg = window.PICKEAT_CONFIG || {};
+const DEMO = !(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase);
+const sb = DEMO ? null : window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+const local = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem('pickeat:' + k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('pickeat:' + k, JSON.stringify(v)); } catch {} },
+};
+
+const api = DEMO ? {
+  async user() { return local.get('user', null); },
+  async signInEmail(email) { local.set('user', { id: 'demo', email }); return true; },
+  async signInGoogle() { local.set('user', { id: 'demo', email: 'demo' }); },
+  async signOut() { local.set('user', null); },
+  async getProfile() { return local.get('profile', null); },
+  async saveProfile(p) { local.set('profile', p); },
+  async listPosts({ board, goal, mine }) {
+    let ps = local.get('posts', []).filter(p => !p.hidden);
+    if (mine) ps = ps.filter(p => p.is_mine);
+    else if (board === 'HOT') ps = ps.filter(p => p.like_count >= HOT_MIN);
+    else ps = ps.filter(p => p.board === board);
+    if (goal) ps = ps.filter(p => p.goal === goal);
+    const cs = local.get('comments', []);
+    return ps.sort((a, b) => b.id - a.id).map(p => ({ ...p, comment_count: cs.filter(c => c.post_id === p.id).length }));
+  },
+  async getPost(id) { return local.get('posts', []).find(p => p.id === id); },
+  async createPost(p) {
+    const ps = local.get('posts', []);
+    ps.push({ ...p, id: Date.now(), like_count: 0, is_mine: true, created_at: new Date().toISOString() });
+    local.set('posts', ps);
+  },
+  async deletePost(id) { local.set('posts', local.get('posts', []).filter(p => p.id !== id)); local.set('comments', local.get('comments', []).filter(c => c.post_id !== id)); },
+  async listComments(postId) { return local.get('comments', []).filter(c => c.post_id === postId); },
+  async addComment(postId, body) {
+    const cs = local.get('comments', []);
+    const post = await this.getPost(postId);
+    cs.push({ id: Date.now(), post_id: postId, anon_no: post?.is_mine ? 0 : 1, body, is_mine: true, created_at: new Date().toISOString() });
+    local.set('comments', cs);
+  },
+  async liked(postId) { return local.get('likes', []).includes(postId); },
+  async toggleLike(postId) {
+    let ls = local.get('likes', []); const on = ls.includes(postId);
+    ls = on ? ls.filter(x => x !== postId) : [...ls, postId]; local.set('likes', ls);
+    local.set('posts', local.get('posts', []).map(p => p.id === postId ? { ...p, like_count: p.like_count + (on ? -1 : 1) } : p));
+    return !on;
+  },
+  async report() { },
+  async deleteMe() { ['user', 'profile', 'posts', 'comments', 'likes'].forEach(k => local.set(k, null)); },
+} : {
+  async user() { const { data } = await sb.auth.getUser(); return data.user; },
+  async signInEmail(email, password, signup) {
+    const { data, error } = signup
+      ? await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } })
+      : await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    // 이미 가입된 이메일로 다시 가입하면 Supabase는 빈 identities를 돌려준다
+    if (signup && data.user && !data.session && data.user.identities?.length === 0) throw new Error('already registered');
+    return !!data.session;
+  },
+  async signInGoogle() { const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }); if (error) throw error; },
+  async signOut() { await sb.auth.signOut(); },
+  async getProfile() { const u = await this.user(); const { data } = await sb.from('profiles').select('*').eq('id', u.id).maybeSingle(); return data; },
+  async saveProfile(p) { const u = await this.user(); const { error } = await sb.from('profiles').upsert({ id: u.id, ...p }); if (error) throw error; },
+  async listPosts({ board, goal, mine }) {
+    let q = sb.from('posts_public').select('*').order('created_at', { ascending: false }).limit(50);
+    if (mine) q = q.eq('is_mine', true);
+    else if (board === 'HOT') q = q.gte('like_count', HOT_MIN);
+    else q = q.eq('board', board);
+    if (goal) q = q.eq('goal', goal);
+    const { data, error } = await q; if (error) throw error;
+    if (!data.length) return data;
+    const { data: cs } = await sb.from('comments_public').select('post_id').in('post_id', data.map(p => p.id));
+    return data.map(p => ({ ...p, comment_count: (cs || []).filter(c => c.post_id === p.id).length }));
+  },
+  async getPost(id) { const { data } = await sb.from('posts_public').select('*').eq('id', id).maybeSingle(); return data; },
+  async createPost(p) { const { error } = await sb.from('posts').insert(p); if (error) throw error; },
+  async deletePost(id) { const { error } = await sb.from('posts').delete().eq('id', id); if (error) throw error; },
+  async listComments(postId) { const { data } = await sb.from('comments_public').select('*').eq('post_id', postId).order('created_at'); return data || []; },
+  async addComment(postId, body) { const { error } = await sb.rpc('add_comment', { p_post: postId, p_body: body }); if (error) throw error; },
+  async liked(postId) { const u = await this.user(); const { data } = await sb.from('likes').select('post_id').eq('post_id', postId).eq('user_id', u.id); return !!data?.length; },
+  async toggleLike(postId) {
+    const u = await this.user();
+    if (await this.liked(postId)) { await sb.from('likes').delete().eq('post_id', postId).eq('user_id', u.id); return false; }
+    await sb.from('likes').insert({ post_id: postId }); return true;
+  },
+  async report(target) {
+    const { error } = await sb.from('reports').insert(target);
+    if (error && error.code === '23505') throw new Error('이미 신고했어요.');
+    if (error) throw error;
+  },
+  async deleteMe() { const { error } = await sb.rpc('delete_me'); if (error) throw error; await sb.auth.signOut(); },
+};
+
+/* ---------- 화면 전환 ---------- */
+const history_ = [];
+function show(id, push = true) {
+  const cur = $('.screen.active');
+  if (push && cur && cur.id !== id) history_.push(cur.id);
+  $$('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  const tabbed = id === 's-board' || id === 's-me';
+  $('#tabbar').hidden = !tabbed;
+  if (tabbed) $$('#tabbar button').forEach(b => b.dataset.tab === id ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  window.scrollTo(0, 0);
+  if (id === 's-board') renderBoard();
+  if (id === 's-me') renderMe();
+  if (id === 's-write') renderWrite();
+}
+document.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]'); if (go) show(go.dataset.go);
+  const tab = e.target.closest('[data-tab]'); if (tab) { history_.length = 0; show(tab.dataset.tab, false); }
+  if (e.target.closest('[data-back]')) show(history_.pop() || 's-board', false);
+});
+
+/* ---------- 로그인 ---------- */
+$('#demo-note').hidden = !DEMO;
+$$('[data-demo]').forEach(el => el.hidden = !DEMO);
+$('#google-btn').hidden = DEMO || !cfg.GOOGLE_LOGIN;
+let signupMode = true;
+const loginLabel = () => signupMode ? '가입하고 시작하기' : '로그인';
+$('#mode-btn').onclick = () => {
+  signupMode = !signupMode;
+  $('#mode-btn').textContent = signupMode ? '이미 가입했어요' : '처음이에요. 가입할게요';
+  $('#password').autocomplete = signupMode ? 'new-password' : 'current-password';
+  $('#email-btn').textContent = loginLabel();
+};
+$('#email-btn').onclick = async () => {
+  const email = $('#email').value.trim(), pw = $('#password').value;
+  if (!/^\S+@\S+\.\S+$/.test(email)) return toast('이메일 주소를 확인해 주세요.');
+  if (pw.length < 6) return toast('비밀번호를 6자 이상 적어 주세요.');
+  const b = $('#email-btn'); b.disabled = true; b.textContent = '확인하고 있어요';
+  try {
+    const hasSession = await api.signInEmail(email, pw, signupMode);
+    if (hasSession) await start();
+    else toast('메일함에서 인증 링크를 눌러 주세요.');
+  } catch (err) { toast(authMessage(err)); }
+  b.disabled = false; b.textContent = loginLabel();
+};
+function authMessage(err) {
+  const m = String(err?.message || '');
+  if (/already registered|already exists/i.test(m)) return '이미 가입한 이메일이에요. "이미 가입했어요"를 눌러 로그인해 주세요.';
+  if (/invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요. 다시 확인해 주세요.';
+  if (/email not confirmed/i.test(m)) return '메일함에서 인증 링크를 먼저 눌러 주세요.';
+  if (/rate limit/i.test(m)) return '잠시 요청이 많았어요. 1분 뒤 다시 눌러 주세요.';
+  return '로그인하지 못했어요. 잠시 뒤 다시 눌러 주세요.';
+}
+$('#google-btn').onclick = async () => {
+  try { await api.signInGoogle(); if (DEMO) start(); } catch { toast('구글 로그인을 열지 못했어요. 이메일로 시작해 주세요.'); }
+};
+
+/* ---------- 입장 설정 ---------- */
+const draft = {};
+$$('[data-choices]').forEach(group => {
+  group.addEventListener('click', e => {
+    const c = e.target.closest('.choice'); if (!c) return;
+    $$('.choice', group).forEach(x => x.setAttribute('aria-pressed', x === c));
+    draft[group.dataset.choices] = c.dataset.value;
+    const btn = $('.btn-primary', group.closest('.screen')); if (btn) btn.disabled = false;
+  });
+});
+$('#body-next').onclick = () => {
+  const vals = { weight_kg: $('#weight').value, body_fat_pct: $('#fat').value, muscle_kg: $('#muscle').value };
+  const any = Object.values(vals).some(v => v !== '');
+  if (any && !$('#body-consent').checked) return toast('몸 수치를 저장하려면 동의에 체크해 주세요.');
+  for (const k in vals) draft[k] = vals[k] === '' ? null : Number(vals[k]);
+  draft.body_consent_at = any ? new Date().toISOString() : null;
+  show('s-goal');
+};
+$('#skip-body').onclick = () => { draft.weight_kg = draft.body_fat_pct = draft.muscle_kg = draft.body_consent_at = null; show('s-goal'); };
+$('#enter-btn').onclick = async () => {
+  const b = $('#enter-btn'); b.disabled = true; b.textContent = '들어가고 있어요';
+  try { await api.saveProfile(draft); profile = await api.getProfile(); history_.length = 0; show('s-board', false); }
+  catch { toast('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+  b.disabled = false; b.textContent = '커뮤니티 들어가기';
+};
+function prefillOnboarding(p) {
+  Object.assign(draft, p || {});
+  const pick = (group, v) => $$(`[data-choices="${group}"] .choice`).forEach(x => x.setAttribute('aria-pressed', x.dataset.value === v));
+  if (p) {
+    pick('gender', p.gender); pick('goal', p.goal);
+    $('#weight').value = p.weight_kg ?? ''; $('#fat').value = p.body_fat_pct ?? ''; $('#muscle').value = p.muscle_kg ?? '';
+    $('#body-consent').checked = !!p.body_consent_at;
+    $$('#s-gender .btn-primary, #enter-btn').forEach(x => x.disabled = false);
+  }
+}
+
+/* ---------- 게시판 ---------- */
+let profile = null;
+const state = { board: '자유', goal: '' };
+function postCard(p, showBoard) {
+  return `<button class="post" data-post="${p.id}">
+    ${p.title ? `<h3>${esc(p.title)}</h3>` : ''}<p>${esc(p.body)}</p>
+    <div class="meta"><span class="tag">${esc(p.goal)}</span>${showBoard ? `<span>${esc(p.board)}</span>` : ''}
+      <span>익명</span><span>${ago(p.created_at)}</span><span>공감 ${p.like_count}</span><span>댓글 ${p.comment_count ?? 0}</span></div>
+  </button>`;
+}
+async function renderBoard() {
+  $('#board-tabs').innerHTML = ['HOT', ...BOARDS].map(b => `<button class="tab" data-board="${b}" aria-pressed="${state.board === b}">${b}</button>`).join('');
+  $('#goal-filter').innerHTML = ['', ...GOALS].map(g => `<button data-goal="${g}" aria-pressed="${state.goal === g}">${g || '전체'}</button>`).join('');
+  const list = $('#post-list');
+  try {
+    const posts = await api.listPosts(state);
+    list.innerHTML = posts.length ? posts.map(p => postCard(p, state.board === 'HOT')).join('')
+      : `<div class="empty">${state.board === 'HOT' ? `공감 ${HOT_MIN}개를 넘은 글이 여기에 모여요.` : '아직 글이 없어요. 첫 글을 남겨 주세요.'}</div>`;
+  } catch { list.innerHTML = '<div class="empty">글을 불러오지 못했어요. 당겨서 새로고침해 주세요.</div>'; }
+}
+$('#board-tabs').onclick = e => { const b = e.target.closest('[data-board]'); if (b) { state.board = b.dataset.board; renderBoard(); } };
+$('#goal-filter').onclick = e => { const b = e.target.closest('[data-goal]'); if (b) { state.goal = b.dataset.goal; renderBoard(); } };
+document.addEventListener('click', e => { const p = e.target.closest('[data-post]'); if (p) openPost(Number(p.dataset.post)); });
+
+/* ---------- 글 보기 · 댓글 · 공감 · 신고 ---------- */
+let currentPost = null;
+async function openPost(id) {
+  const p = await api.getPost(id);
+  if (!p) return toast('숨겨졌거나 지워진 글이에요.');
+  currentPost = p;
+  $('#s-detail .top h2').textContent = p.board;
+  $('#delete-post').hidden = !p.is_mine;
+  const liked = await api.liked(id);
+  $('#detail').innerHTML = `
+    <div class="meta" style="margin-top:0"><span class="tag">${esc(p.goal)}</span><span>익명${p.is_mine ? ' (나)' : ''}</span><span>${ago(p.created_at)}</span></div>
+    ${p.title ? `<h2 style="margin-top:var(--sp-1)">${esc(p.title)}</h2>` : ''}
+    <p class="detail-body">${esc(p.body)}</p>
+    <div class="actions">
+      <button id="like-btn" aria-pressed="${liked}">공감 <span>${p.like_count}</span></button>
+      ${p.is_mine ? '' : '<button id="report-btn">신고</button>'}
+    </div>`;
+  show('s-detail');
+  renderComments();
+}
+async function renderComments() {
+  const cs = await api.listComments(currentPost.id);
+  $('#comments').innerHTML = cs.length ? cs.map(c => `
+    <div class="comment">
+      <b class="${c.anon_no === 0 ? 'writer' : ''}">${c.anon_no === 0 ? '익명(글쓴이)' : '익명' + c.anon_no}</b>
+      <span class="small"> · ${ago(c.created_at)}</span>
+      ${c.is_mine ? '' : `<button class="small" style="float:right" data-report-comment="${c.id}">신고</button>`}
+      <p>${esc(c.body)}</p>
+    </div>`).join('') : '<p class="small">첫 댓글을 남겨 주세요.</p>';
+}
+$('#detail').addEventListener('click', async e => {
+  if (e.target.closest('#like-btn')) {
+    const on = await api.toggleLike(currentPost.id);
+    currentPost.like_count += on ? 1 : -1;
+    const b = $('#like-btn'); b.setAttribute('aria-pressed', on); $('span', b).textContent = currentPost.like_count;
+  }
+  if (e.target.closest('#report-btn')) report({ post_id: currentPost.id });
+});
+$('#comments').addEventListener('click', e => { const b = e.target.closest('[data-report-comment]'); if (b) report({ comment_id: Number(b.dataset.reportComment) }); });
+async function report(target) {
+  if (!confirm((target.post_id ? '이 글을' : '이 댓글을') + ' 신고할까요? 신고가 5번 쌓이면 자동으로 숨겨져요.')) return;
+  try { await api.report(target); toast('신고했어요. 운영자가 확인할게요.'); } catch (err) { toast(err.message?.startsWith('이미') ? err.message : '신고하지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+}
+$('#comment-btn').onclick = async () => {
+  const body = $('#comment-input').value.trim(); if (!body) return;
+  try { await api.addComment(currentPost.id, body); $('#comment-input').value = ''; renderComments(); }
+  catch { toast('댓글을 올리지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+};
+$('#delete-post').onclick = async () => {
+  if (!confirm('이 글을 지울까요? 지운 글은 되돌릴 수 없어요.')) return;
+  await api.deletePost(currentPost.id); toast('글을 지웠어요.'); history_.length = 0; show('s-board', false);
+};
+
+/* ---------- 글쓰기 ---------- */
+let writeBoard = null;
+function renderWrite() {
+  writeBoard = BOARDS.includes(state.board) ? state.board : '자유';
+  $('#write-boards').innerHTML = BOARDS.map(b => `<button class="tab" data-wb="${b}" aria-pressed="${b === writeBoard}">${b}</button>`).join('');
+}
+$('#write-boards').onclick = e => { const b = e.target.closest('[data-wb]'); if (!b) return; writeBoard = b.dataset.wb; $$('[data-wb]').forEach(x => x.setAttribute('aria-pressed', x === b)); };
+$('#post-btn').onclick = async () => {
+  const body = $('#w-body').value.trim();
+  if (!body) return toast('내용을 적어 주세요.');
+  const b = $('#post-btn'); b.disabled = true; b.textContent = '올리고 있어요';
+  try {
+    await api.createPost({ board: writeBoard, goal: profile.goal, title: $('#w-title').value.trim() || null, body });
+    $('#w-title').value = $('#w-body').value = '';
+    state.board = writeBoard; history_.length = 0; show('s-board', false); toast('글을 올렸어요.');
+  } catch { toast('글을 올리지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+  b.disabled = false; b.textContent = '올리기';
+};
+
+/* ---------- 내 정보 ---------- */
+async function renderMe() {
+  const p = profile || {};
+  const num = (v, u) => v == null ? '<span class="muted">비어 있음</span>' : `<b>${v}</b>${u}`;
+  $('#me-info').innerHTML = `
+    <div class="info-row"><span>목표</span><span class="tag">${esc(p.goal)}</span></div>
+    <div class="info-row"><span>성별</span><span>${esc(p.gender || '')}</span></div>
+    <div class="info-row"><span>몸무게</span><span>${num(p.weight_kg, 'kg')}</span></div>
+    <div class="info-row"><span>체지방률</span><span>${num(p.body_fat_pct, '%')}</span></div>
+    <div class="info-row"><span>골격근량</span><span>${num(p.muscle_kg, 'kg')}</span></div>
+    <p class="small muted" style="margin-top:var(--sp-1)">목표 말고는 나만 볼 수 있어요.</p>`;
+  const mine = await api.listPosts({ mine: true });
+  $('#my-posts').innerHTML = mine.length ? mine.map(x => postCard(x, true)).join('') : '<p class="small">아직 쓴 글이 없어요.</p>';
+}
+$('#edit-profile').onclick = () => { prefillOnboarding(profile); show('s-gender'); };
+$('#logout-btn').onclick = async () => { await api.signOut(); history_.length = 0; show('s-login', false); };
+$('#delete-me').onclick = async () => {
+  if (!confirm('탈퇴할까요? 쓴 글과 댓글, 몸 수치가 모두 지워지고 되돌릴 수 없어요.')) return;
+  try { await api.deleteMe(); profile = null; history_.length = 0; show('s-login', false); toast('탈퇴했어요. 그동안 고마웠어요.'); }
+  catch { toast('탈퇴하지 못했어요. 잠시 뒤 다시 눌러 주세요.'); }
+};
+
+/* ---------- 시작 ---------- */
+let starting = null;
+function start() { return starting ||= boot().finally(() => { starting = null; }); }
+async function boot() {
+  const u = await api.user();
+  if (!u) return show('s-login', false);
+  profile = await api.getProfile();
+  if (!profile) return show('s-gender', false);
+  show('s-board', false);
+}
+if (sb) sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN') start(); });
+start();
+</script>
+</body>
+</html>
