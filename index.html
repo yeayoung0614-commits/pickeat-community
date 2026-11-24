@@ -62,7 +62,7 @@ h2 { font-size: var(--fs-lg); line-height: 1.35; }
 label.field { display: block; }
 label.field span { display: block; font-weight: 600; margin-bottom: 4px; }
 .input-wrap { position: relative; }
-input[type=text], input[type=email], input[type=number], textarea {
+input[type=text], input[type=email], input[type=number], input[type=password], textarea {
   width: 100%; height: var(--btn-h); padding: 0 var(--sp-2); font: inherit; color: var(--color-text);
   background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius); outline: none; }
 input:focus, textarea:focus { border-color: var(--color-primary); }
@@ -257,11 +257,30 @@ textarea { height: 200px; padding: var(--sp-2); resize: vertical; line-height: 1
   <div class="card" id="me-info"></div>
   <div class="section stack">
     <button class="btn btn-secondary" id="edit-profile">목표·몸 수치 바꾸기</button>
-    <button class="btn btn-secondary" id="logout-btn">로그아웃</button>
+    <button class="btn btn-secondary" data-go="s-account">계정 관리</button>
   </div>
   <h2 class="section" style="font-size:var(--fs-md)">내가 쓴 글</h2>
   <div class="section" id="my-posts" style="margin-top:var(--sp-1)"></div>
-  <p class="section" style="text-align:center"><button class="danger-link" id="delete-me">탈퇴하기</button></p>
+</section>
+
+<!-- 계정 관리 -->
+<section class="screen" id="s-account">
+  <div class="top"><button class="icon-btn" data-back>← 내 정보</button><h2>계정 관리</h2></div>
+  <div class="card" id="account-info"></div>
+  <h2 class="section" style="font-size:var(--fs-md)">비밀번호 바꾸기</h2>
+  <div class="stack" style="margin-top:var(--sp-1)" id="pw-form">
+    <input type="password" id="cur-password" placeholder="지금 비밀번호" autocomplete="current-password">
+    <input type="password" id="next-password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password">
+    <button class="btn btn-secondary" id="pw-change">비밀번호 바꾸기</button>
+  </div>
+  <div class="section stack">
+    <button class="btn btn-secondary" id="logout-btn">로그아웃</button>
+  </div>
+  <p class="section small" style="text-align:center"><a class="link" href="terms.html">이용규칙</a> · <a class="link" href="privacy.html">개인정보처리방침</a></p>
+  <div class="section card small">
+    <b>탈퇴하면</b> 쓴 글과 댓글, 공감, 성별·목표·몸 수치가 모두 바로 지워지고 되돌릴 수 없어요.
+    <p style="margin-top:var(--sp-1)"><button class="danger-link" id="delete-me">탈퇴하기</button></p>
+  </div>
 </section>
 
 <nav class="tabbar" id="tabbar" hidden><div>
@@ -394,6 +413,7 @@ function show(id, push = true) {
   window.scrollTo(0, 0);
   if (id === 's-board') renderBoard();
   if (id === 's-me') renderMe();
+  if (id === 's-account') renderAccount();
   if (id === 's-write') renderWrite();
 }
 document.addEventListener('click', e => {
@@ -589,7 +609,40 @@ async function renderMe() {
   const mine = await api.listPosts({ mine: true });
   $('#my-posts').innerHTML = mine.length ? mine.map(x => postCard(x, true)).join('') : '<p class="small">아직 쓴 글이 없어요.</p>';
 }
-$('#s-me').insertAdjacentHTML('beforeend', '<p class="small" style="text-align:center;margin-top:var(--sp-2)"><a class="link" href="terms.html">이용규칙</a> · <a class="link" href="privacy.html">개인정보처리방침</a></p>');
+let reauth = false;   // 비밀번호 확인용 로그인은 화면을 바꾸지 않는다
+async function renderAccount() {
+  const u = await api.user();
+  const day = t => t ? new Date(t).toLocaleDateString('ko-KR') : '-';
+  const agreed = u?.user_metadata?.agreed_at;
+  $('#account-info').innerHTML = `
+    <div class="info-row"><span>로그인 이메일</span><span>${esc(DEMO ? '체험 모드' : u?.email)}</span></div>
+    <div class="info-row"><span>가입일</span><span>${day(u?.created_at)}</span></div>
+    <div class="info-row"><span>약관 동의</span><span>${agreed ? day(agreed) : '-'}</span></div>
+    <div class="info-row"><span>몸 수치 수집 동의</span><span>${profile?.body_consent_at ? day(profile.body_consent_at) : '안 함'}</span></div>
+    <p class="small muted" style="margin-top:var(--sp-1)">이메일은 나만 볼 수 있어요.</p>`;
+  $('#pw-form').hidden = DEMO;
+  $('#cur-password').value = $('#next-password').value = '';
+}
+$('#pw-change').onclick = async () => {
+  const cur = $('#cur-password').value, next = $('#next-password').value;
+  if (!cur) return toast('지금 비밀번호를 적어 주세요.');
+  if (next.length < 6) return toast('새 비밀번호를 6자 이상 적어 주세요.');
+  const b = $('#pw-change'); b.disabled = true; b.textContent = '바꾸고 있어요';
+  try {
+    const u = await api.user();
+    reauth = true;
+    const { error: e1 } = await sb.auth.signInWithPassword({ email: u.email, password: cur }).finally(() => { reauth = false; });
+    if (e1) throw new Error('current');
+    const { error } = await sb.auth.updateUser({ password: next });
+    if (error) throw error;
+    $('#cur-password').value = $('#next-password').value = '';
+    toast('비밀번호를 바꿨어요.');
+  } catch (err) {
+    toast(err.message === 'current' ? '지금 비밀번호가 맞지 않아요.'
+      : /different from the old/i.test(err?.message) ? '지금과 다른 비밀번호를 적어 주세요.' : '바꾸지 못했어요. 잠시 뒤 다시 눌러 주세요.');
+  }
+  b.disabled = false; b.textContent = '비밀번호 바꾸기';
+};
 $('#edit-profile').onclick = () => { prefillOnboarding(profile); show('s-gender'); };
 $('#logout-btn').onclick = async () => { await api.signOut(); history_.length = 0; show('s-login', false); };
 $('#delete-me').onclick = async () => {
@@ -638,7 +691,7 @@ async function boot() {
 }
 if (sb) sb.auth.onAuthStateChange((ev) => {
   if (ev === 'PASSWORD_RECOVERY') { recovering = true; show('s-reset', false); }
-  else if (ev === 'SIGNED_IN') start();
+  else if (ev === 'SIGNED_IN' && !reauth) start();
 });
 start();
 </script>
